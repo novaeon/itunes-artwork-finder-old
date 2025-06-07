@@ -1,6 +1,30 @@
 iTunes Artwork Finder
 =====================
 
+This repository now includes a small Python package which provides a programmatic
+way to search the iTunes API for artwork URLs. The original JavaScript and PHP
+files are still present for reference.
+
+## Python usage
+
+Install the package in editable mode:
+
+```bash
+pip install -e .
+```
+
+Then use it in your own code:
+
+```python
+from itunes_artwork_finder import search_artwork
+
+results = search_artwork("Ted Lasso", entity="tvSeason", country="us")
+for item in results:
+    print(item["title"], item["hires"])
+```
+
+## Web usage
+
 This is the JavaScript and PHP code that powers the iTunes Artwork Finder available at [https://bendodson.com/projects/itunes-artwork-finder/](https://bendodson.com/projects/itunes-artwork-finder/)
 
 To use on your own site, simply upload both the JavaScript and PHP files and then initialise the script with something like:
