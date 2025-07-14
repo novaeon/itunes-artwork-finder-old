@@ -1,0 +1,99 @@
+
+
+     def __init__(self):
+         super().__init__()
+         # … your existing setup …
+         self._build_ui()
+         self._connect_signals()
+
++        # connect the new config_signal to its handler
++        self.config_signal.connect(self._on_config)
+
+         # UI‐refresh timer
+         self.ui_timer = QtCore.QTimer(self, interval=100)
+         self.ui_timer.timeout.connect(self._update_scores)
+
+         # wire existing signals → slots
+         self.status_signal       .connect(self.status_lbl.setText)
+         self.network_ready_signal.connect(self._on_network_connected)
+         self.network_error_signal.connect(self._on_network_error)
+         self.game_error_signal   .connect(self._on_game_error)
+
+     def _build_ui(self):
+         w = QtWidgets.QWidget()
+         self.setCentralWidget(w)
+         v = QtWidgets.QVBoxLayout(w)
+         v.setSpacing(12)
+
+         # — Connection group — (no changes)
+         cg = QtWidgets.QGroupBox("Connection")
+         # … your code …
+         v.addWidget(cg)
+
+         # — Game settings group —
+-        gg = QtWidgets.QGroupBox("Game Settings")
++        gg = QtWidgets.QGroupBox("Game Settings")
++        # store a reference so we can disable it later
++        self.game_group = gg
+         ggl = QtWidgets.QGridLayout(gg)
+         # … your existing mode/target/duration widgets …
+         v.addWidget(gg)
+
+         # — Connect & Start buttons — (no changes)
+         # …
+
+     def _connect_network(self):
+         try:
+             # … your existing bind/connect + READY handshake …
+-            # notify GUI thread
+-            self.network_ready_signal.emit(conn)
++            # — AFTER READY handshake, exchange the host's config —
++            if self.role_host.isChecked():
++                # host: send its UI settings
++                config = {
++                    "type":     "config",
++                    "mode":     "target" if self.mode_target.isChecked() else "timed",
++                    "target":   self.target_spin.value(),
++                    "duration": self.duration_spin.value(),
++                }
++                conn.sendall(json.dumps(config).encode() + b"\n")
++            else:
++                # client: block until it gets that config
++                buf2 = b""
++                while True:
++                    data = conn.recv(1024)
++                    if not data:
++                        raise ConnectionError("Lost before config")
++                    buf2 += data
++                    if b"\n" in buf2:
++                        line2, buf2 = buf2.split(b"\n", 1)
++                        try:
++                            msg = json.loads(line2.decode())
++                        except:
++                            continue
++                        if msg.get("type") == "config":
++                            # emit into main thread
++                            self.config_signal.emit(msg)
++                            break
++
++            # now signal that the network is ready
++            self.network_ready_signal.emit(conn)
+
+         except Exception as e:
+             self.network_error_signal.emit(str(e))
+
++    @QtCore.pyqtSlot(dict)
++    def _on_config(self, config):
++        """Client: apply host's settings and lock them out in the UI."""
++        # apply mode
++        if config["mode"] == "target":
++            self.mode_target.setChecked(True)
++        else:
++            self.mode_timed.setChecked(True)
++        # apply values
++        self.target_spin.setValue(config.get("target", 0))
++        self.duration_spin.setValue(config.get("duration", 0))
++        # disable the entire game‐settings group
++        self.game_group.setEnabled(False)
++        # update status so the user sees it
++        self.status_signal.emit("Game settings locked by host")
